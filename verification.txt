@@ -20,3 +20,112 @@ response:
 NAME           TYPE           CLUSTER-IP       EXTERNAL-IP    PORT(S)        AGE
 game-service   LoadBalancer   34.118.225.128   34.118.34.44   80:32469/TCP   165m
 kubernetes     ClusterIP      34.118.224.1     <none>         443/TCP        24h
+
+Created a new job:
+kubectl apply -f spammer.yaml
+kubectl get pods
+
+response:
+PS C:\Users\Jovan\Desktop\game-service\game-service> kubectl get pods
+NAME                           READY   STATUS      RESTARTS   AGE
+game-service-d9cc468d9-mmj7x   1/1     Running     0          3h42m
+game-service-d9cc468d9-qxm7g   1/1     Running     0          3h42m
+spammer-qnsbn                  0/1     Completed   0          5m52s
+
+Viewed logs:
+kubectl logs spammer-qnsbn
+
+Spamming http://game-service:80
+  RPS         : 1000
+  Duration    : 60s
+  Warmup      : 60s @ 100 req/s
+  Endpoints   : ['get_stats', 'update_player']
+
+Warming up for 60s at 100 req/s...
+Warmup done.
+Sending 60000 requests at 1000 req/s for 60s...
+
+============================================================
+SPAMMER REPORT
+============================================================
+Total requests : 60000
+Wall time      : 157.11s
+Throughput     : 381.9 req/s
+Success (2xx)  : 9993
+Client err(4xx): 0
+Errors/5xx     : 50007
+
+Latency (ms):
+  avg : 19252.3
+  p50 : 11760.8
+  p95 : 63478.2
+  p99 : 66420.9
+  min : 25.1
+  max : 68062.0
+============================================================
+
+We can now decrease some env vars, as well as to increase resources such as RAM or CPU, or replicas, in deployment.yaml to get a higher amount of 2xx responses
+
+For instance: decrease to 500 RPS:
+Spamming http://game-service:80
+  RPS         : 500
+  Duration    : 60s
+  Warmup      : 60s @ 100 req/s
+  Endpoints   : ['get_stats', 'update_player']
+
+Warming up for 60s at 100 req/s...
+Warmup done.
+Sending 30000 requests at 500 req/s for 60s...
+
+============================================================
+SPAMMER REPORT
+============================================================
+Total requests : 30000
+Wall time      : 74.62s
+Throughput     : 402.0 req/s
+Success (2xx)  : 25650
+Client err(4xx): 0
+Errors/5xx     : 4350
+
+Latency (ms):
+  avg : 1826.0
+  p50 : 734.0
+  p95 : 10801.9
+  p99 : 24452.0
+  min : 15.3
+  max : 30596.0
+============================================================
+
+And then increase CPU to 400m:
+Spamming http://game-service:80
+  RPS         : 500
+  Duration    : 60s
+  Warmup      : 60s @ 100 req/s
+  Endpoints   : ['get_stats', 'update_player']
+
+Warming up for 60s at 100 req/s...
+Warmup done.
+Sending 30000 requests at 500 req/s for 60s...
+
+============================================================
+SPAMMER REPORT
+============================================================
+Total requests : 30000
+Wall time      : 60.11s
+Throughput     : 499.1 req/s
+Success (2xx)  : 29981
+Client err(4xx): 0
+Errors/5xx     : 19
+
+Latency (ms):
+  avg : 139.7
+  p50 : 42.1
+  p95 : 469.9
+  p99 : 2550.0
+  min : 6.3
+  max : 3512.6
+============================================================
+
+This would be an acceptable solution but wastes resources when unused
+
+However, a better approach
