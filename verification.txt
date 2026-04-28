@@ -1,0 +1,22 @@
+# Get all cluster nodes:
+kubectl get nodes
+
+response:
+NAME                                         STATUS   ROLES    AGE    VERSION
+gk3-sre-cluster-nap-z0hdt6i8-ccbfd612-9l49   Ready    <none>   170m   v1.35.1-gke.1396002
+
+Get all pods:
+kubectl get pods
+
+response:
+NAME                           READY   STATUS    RESTARTS   AGE
+game-service-d9cc468d9-mmj7x   1/1     Running   0          174m
+game-service-d9cc468d9-qxm7g   1/1     Running   0          174m
+
+Get all services:
+kubectl get svc
+
+response:
+NAME           TYPE           CLUSTER-IP       EXTERNAL-IP    PORT(S)        AGE
+game-service   LoadBalancer   34.118.225.128   34.118.34.44   80:32469/TCP   165m
+kubernetes     ClusterIP      34.118.224.1     <none>         443/TCP        24h

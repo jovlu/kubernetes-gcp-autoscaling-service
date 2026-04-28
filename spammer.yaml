@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spammer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spammer
+  template:
+    metadata:
+      labels:
+        app: spammer
+    spec:
+      containers:
+        - name: spammer
+          image: europe-docker.pkg.dev/nord-inf-prod/public-docker-repository/jobfair/spammer:latest
+          env:
+            - name: SPAMMER_BASE_URL
+              value: "http://game-service:80"
+            - name: SPAMMER_RPS
+              value: "1000"
+            - name: SPAMMER_DURATION_SECONDS
+              value: "60"
+            - name: SPAMMER_WARMUP_SECONDS
+              value: "60"
+            - name: SPAMMER_WARMUP_RPS
+              value: "100"
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
