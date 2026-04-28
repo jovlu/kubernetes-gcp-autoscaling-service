@@ -1,17 +1,11 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: spammer
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: spammer
   template:
-    metadata:
-      labels:
-        app: spammer
     spec:
+      restartPolicy: Never
       containers:
         - name: spammer
           image: europe-docker.pkg.dev/nord-inf-prod/public-docker-repository/jobfair/spammer:latest
@@ -26,10 +20,3 @@ spec:
               value: "60"
             - name: SPAMMER_WARMUP_RPS
               value: "100"
-          resources:
-            requests:
-              cpu: "200m"
-              memory: "256Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
