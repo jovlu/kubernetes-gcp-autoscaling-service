@@ -66,14 +66,16 @@ Latency (ms):
 
 We can now decrease some env vars, as well as to increase resources such as RAM or CPU, or replicas, in deployment.yaml to get a higher amount of 2xx responses
 
-For instance: decrease to 500 RPS:
+Decreasing the spammer RPS to 500, with no change to the CPU or RAM (which essentially isn't an improvement, but doing HPA with even 6 or 4 replicas is stopped by Google)
+Note: Increasing the CPU limit to 400m while holding RPS at 1000 dramatically increased the success rate
+
 Spamming http://game-service:80
   RPS         : 500
   Duration    : 60s
-  Warmup      : 60s @ 100 req/s
+  Warmup      : 60s @ 50 req/s
   Endpoints   : ['get_stats', 'update_player']
 
-Warming up for 60s at 100 req/s...
+Warming up for 60s at 50 req/s...
 Warmup done.
 Sending 30000 requests at 500 req/s for 60s...
 
@@ -81,29 +83,30 @@ Sending 30000 requests at 500 req/s for 60s...
 SPAMMER REPORT
 ============================================================
 Total requests : 30000
-Wall time      : 74.62s
-Throughput     : 402.0 req/s
-Success (2xx)  : 25650
+Wall time      : 79.02s
+Throughput     : 379.6 req/s
+Success (2xx)  : 22383
 Client err(4xx): 0
-Errors/5xx     : 4350
+Errors/5xx     : 7617
 
 Latency (ms):
-  avg : 1826.0
-  p50 : 734.0
-  p95 : 10801.9
-  p99 : 24452.0
-  min : 15.3
-  max : 30596.0
+  avg : 2767.1
+  p50 : 833.9
+  p95 : 17744.1
+  p99 : 26309.3
+  min : 9.7
+  max : 30814.5
 ============================================================
 
-And then increase CPU to 400m:
+If we apply max 4 replicas at 30% CPU utilisation
+
 Spamming http://game-service:80
   RPS         : 500
   Duration    : 60s
-  Warmup      : 60s @ 100 req/s
+  Warmup      : 60s @ 50 req/s
   Endpoints   : ['get_stats', 'update_player']
 
-Warming up for 60s at 100 req/s...
+Warming up for 60s at 50 req/s...
 Warmup done.
 Sending 30000 requests at 500 req/s for 60s...
 
@@ -111,21 +114,49 @@ Sending 30000 requests at 500 req/s for 60s...
 SPAMMER REPORT
 ============================================================
 Total requests : 30000
-Wall time      : 60.11s
-Throughput     : 499.1 req/s
-Success (2xx)  : 29981
+Wall time      : 61.75s
+Throughput     : 485.8 req/s
+Success (2xx)  : 29982
 Client err(4xx): 0
-Errors/5xx     : 19
+Errors/5xx     : 18
 
 Latency (ms):
-  avg : 139.7
-  p50 : 42.1
-  p95 : 469.9
-  p99 : 2550.0
-  min : 6.3
-  max : 3512.6
+  avg : 1411.7
+  p50 : 254.5
+  p95 : 11792.2
+  p99 : 18181.3
+  min : 6.9
+  max : 27048.5
 ============================================================
 
-This would be an acceptable solution but wastes resources when unused
+And 30% is for the other pods to have time to wake up, obviously it is for this use case only.
 
-However, a better approach
+Reducing the requested CPU to 50m (increasing CPU util to 60%)
+Spamming http://game-service:80
+  RPS         : 500
+  Duration    : 60s
+  Warmup      : 60s @ 50 req/s
+  Endpoints   : ['get_stats', 'update_player']
+
+Warming up for 60s at 50 req/s...
+Warmup done.
+Sending 30000 requests at 500 req/s for 60s...
+
+============================================================
+SPAMMER REPORT
+============================================================
+Total requests : 30000
+Wall time      : 60.09s
+Throughput     : 499.2 req/s
+Success (2xx)  : 30000
+Client err(4xx): 0
+Errors/5xx     : 0
+
+Latency (ms):
+  avg : 75.1
+  p50 : 55.2
+  p95 : 181.2
+  p99 : 381.5
+  min : 5.9
+  max : 1409.1
+============================================================

@@ -13,10 +13,10 @@ spec:
             - name: SPAMMER_BASE_URL
               value: "http://game-service:80"
             - name: SPAMMER_RPS
-              value: "1000"
+              value: "500"
             - name: SPAMMER_DURATION_SECONDS
               value: "60"
             - name: SPAMMER_WARMUP_SECONDS
               value: "60"
             - name: SPAMMER_WARMUP_RPS
-              value: "100"
+              value: "50"
