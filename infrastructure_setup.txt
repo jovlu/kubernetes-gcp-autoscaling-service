@@ -1,0 +1,11 @@
+Cloud provider: Google Cloud Platform (GCP)
+
+Cluster type: Google Kubernetes Engine (GKE) Autopilot
+
+Cluster name: sre-cluster
+
+Region: europe-central2
+
+Node pool configuration: Not manually configured. The cluster is Autopilot, so Google manages node pools, node count, machine types, node provisioning, and node lifecycle automatically.
+
+Cluster autoscaler: Managed automatically by GKE Autopilot. No manual cluster autoscaler configuration was set.
