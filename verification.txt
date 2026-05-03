@@ -160,3 +160,92 @@ Latency (ms):
   min : 5.9
   max : 1409.1
 ============================================================
+
+Final selected config after additional tuning:
+- Disabled Uvicorn access logs with deployment command:
+  uvicorn main:app --host 0.0.0.0 --port 8000 --no-access-log
+- Deployment replicas: 4
+- Per-pod request: 50m CPU, 52Mi memory
+- Per-pod limit: 120m CPU, 96Mi memory
+- HPA range: minReplicas 4, maxReplicas 4
+- Spammer profile: 500 RPS for 120s after 120s warmup at 50 RPS
+
+Spamming http://game-service:80
+  RPS         : 500
+  Duration    : 120s
+  Warmup      : 120s @ 50 req/s
+  Endpoints   : ['get_stats', 'update_player']
+
+Warming up for 120s at 50 req/s...
+Warmup done.
+Sending 60000 requests at 500 req/s for 120s...
+
+============================================================
+SPAMMER REPORT
+============================================================
+Total requests : 60000
+Wall time      : 120.11s
+Throughput     : 499.5 req/s
+Success (2xx)  : 59996
+Client err(4xx): 0
+Errors/5xx     : 4
+
+Latency (ms):
+  avg : 534.8
+  p50 : 53.2
+  p95 : 2842.2
+  p99 : 12081.5
+  min : 5.4
+  max : 17682.0
+============================================================
+
+This is the selected practical optimum: 4 errors out of 60000 requests, or about 0.0067% 5xx.
+Testing showed that a perfect zero-error run can happen, but it is not stable enough to optimize around.
+
+Revised final selected config for real autoscaling:
+- The fixed 4-replica setup was rejected because it did not demonstrate HPA scaling.
+- Deployment starts with 2 replicas.
+- HPA scales from 2 to 5 replicas at a 30% CPU utilization target.
+- HPA scale-up behavior allows up to 3 pods or 200% growth every 15s.
+- HPA scale-down stabilization is 60s.
+- Per-pod request: 50m CPU, 52Mi memory.
+- Per-pod limit: 120m CPU, 128Mi memory.
+- Uvicorn access logs remain disabled.
+- Spammer profile: 625 RPS for 120s after 180s warmup at 300 RPS.
+
+Observed during warmup:
+game-service-hpa   Deployment/game-service   cpu: 137%/30%   2   5   5
+
+Final selected spike result:
+
+Spamming http://game-service:80
+  RPS         : 625
+  Duration    : 120s
+  Warmup      : 180s @ 300 req/s
+  Endpoints   : ['get_stats', 'update_player']
+
+Warming up for 180s at 300 req/s...
+Warmup done.
+Sending 75000 requests at 625 req/s for 120s...
+
+============================================================
+SPAMMER REPORT
+============================================================
+Total requests : 75000
+Wall time      : 120.29s
+Throughput     : 623.5 req/s
+Success (2xx)  : 74994
+Client err(4xx): 0
+Errors/5xx     : 6
+
+Latency (ms):
+  avg : 343.9
+  p50 : 87.2
+  p95 : 913.8
+  p99 : 6645.9
+  min : 4.9
+  max : 15953.0
+============================================================
+
+This is the selected scaling optimum from the tested matrix: 6 errors out of 75000 requests, or about 0.008% 5xx, while demonstrating scale-out from 2 to 5 replicas.
+Higher tested spike loads were rejected: 650 RPS had 88 5xx, 700 RPS had 574 5xx, and 750 RPS overloaded the deployment and caused pod restarts.

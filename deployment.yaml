@@ -15,12 +15,14 @@ spec:
       containers:
         - name: game-service
           image: europe-central2-docker.pkg.dev/sre-challenge-494614/sre-repository/game-service:v1
+          command: ["uvicorn"]
+          args: ["main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
           ports:
             - containerPort: 8000
           resources:
             requests:
               cpu: "50m"
-              memory: "128Mi"
+              memory: "52Mi"
             limits:
-              cpu: "150m"
-              memory: "256Mi"
+              cpu: "120m"
+              memory: "128Mi"

@@ -4,15 +4,16 @@ The repository contains the following deployment resources:
 
 - `deployment.yaml`: Deploys the `game-service` application with 2 base replicas.
 - `service.yaml`: Exposes the application through a `LoadBalancer` Service on port `80`, forwarding to container port `8000`.
-- `hpa.yaml`: Configures a Horizontal Pod Autoscaler for the `game-service` Deployment with `minReplicas: 2`, `maxReplicas: 4`, and a CPU utilization target of `60%`.
+- `hpa.yaml`: Configures real autoscaling for the `game-service` Deployment from 2 to 5 replicas at a `30%` CPU utilization target.
 - `spammer.yaml`: Runs a one-off load-generation Job against the in-cluster Service DNS name `http://game-service:80`.
 
 Current resource settings in this repository:
 
-- Deployment requests: `50m` CPU and `128Mi` memory
-- Deployment limits: `150m` CPU and `256Mi` memory
-- HPA range: 2 to 4 replicas
-- Spammer profile: `500` RPS for `60` seconds after a `60` second warmup at `50` RPS
+- Deployment command: `uvicorn main:app --host 0.0.0.0 --port 8000 --no-access-log`
+- Deployment requests: `50m` CPU and `52Mi` memory per pod
+- Deployment limits: `120m` CPU and `128Mi` memory per pod
+- HPA range: 2 to 5 replicas, with an aggressive scale-up policy and 60 second scale-down stabilization
+- Spammer profile: `625` RPS for `120` seconds after a `180` second warmup at `300` RPS
 
 ### Nodes
 
@@ -248,6 +249,52 @@ Latency (ms):
 
 This was the strongest recorded result in the verification notes. Under the `500` RPS profile, the service completed all `30000` requests successfully with no 5xx responses.
 
+### Scenario 5: Selected Scaling Configuration
+
+The final selected configuration disables Uvicorn access logs and uses the HPA to scale from 2 base replicas to 5 replicas during warmup. This keeps idle resources low while still preparing enough capacity before the measured spike.
+
+During warmup, HPA was observed scaling from 2 to 5 replicas:
+
+```text
+NAME               REFERENCE                 TARGETS         MINPODS   MAXPODS   REPLICAS
+game-service-hpa   Deployment/game-service   cpu: 137%/30%   2         5         5
+```
+
+Recorded output:
+
+```text
+Spamming http://game-service:80
+  RPS         : 625
+  Duration    : 120s
+  Warmup      : 180s @ 300 req/s
+  Endpoints   : ['get_stats', 'update_player']
+
+Warming up for 180s at 300 req/s...
+Warmup done.
+Sending 75000 requests at 625 req/s for 120s...
+
+============================================================
+SPAMMER REPORT
+============================================================
+Total requests : 75000
+Wall time      : 120.29s
+Throughput     : 623.5 req/s
+Success (2xx)  : 74994
+Client err(4xx): 0
+Errors/5xx     : 6
+
+Latency (ms):
+  avg : 343.9
+  p50 : 87.2
+  p95 : 913.8
+  p99 : 6645.9
+  min : 4.9
+  max : 15953.0
+============================================================
+```
+
+This is a `99.992%` success rate under the `625` RPS spike profile. Higher tests were also tried: `650` RPS produced `88` 5xx responses, while `700` RPS produced `574` 5xx responses. `750` RPS was rejected because it overloaded the deployment and caused pod restarts.
+
 ## Conclusion
 
 The verification data shows a clear progression:
@@ -255,6 +302,7 @@ The verification data shows a clear progression:
 - The baseline deployment could not sustain `1000` RPS reliably.
 - Reducing traffic to `500` RPS improved results, but did not eliminate server-side failures.
 - Adding autoscaling headroom and tuning CPU-based scaling materially improved performance.
-- The best recorded result came from reducing the CPU request to `50m` while using a `60%` CPU utilization target, resulting in full success at `500` RPS.
+- Disabling Uvicorn access logs removed a major source of per-request overhead.
+- The selected configuration starts at 2 replicas and scales to 5 during warmup, producing near-zero 5xx responses under a `625` RPS spike.
 
-This repository is therefore configured around a scale-out approach rather than permanently over-provisioning CPU for a fixed number of replicas.
+This repository is therefore configured around a real scale-out demonstration: low steady-state replicas, warmup-driven HPA scale-out, and a high-RPS spike handled by the scaled deployment.
