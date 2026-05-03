@@ -1,104 +1,40 @@
-## Kubernetes Resources
-
-The repository contains the following deployment resources:
-
-- `deployment.yaml`: Deploys the `game-service` application with 2 base replicas.
-- `service.yaml`: Exposes the application through a `LoadBalancer` Service on port `80`, forwarding to container port `8000`.
-- `hpa.yaml`: Configures real autoscaling for the `game-service` Deployment from 2 to 5 replicas at a `30%` CPU utilization target.
-- `spammer.yaml`: Runs a one-off load-generation Job against the in-cluster Service DNS name `http://game-service:80`.
-
-Current resource settings in this repository:
-
-- Deployment command: `uvicorn main:app --host 0.0.0.0 --port 8000 --no-access-log`
-- Deployment requests: `50m` CPU and `52Mi` memory per pod
-- Deployment limits: `120m` CPU and `128Mi` memory per pod
-- HPA range: 2 to 5 replicas, with an aggressive scale-up policy and 60 second scale-down stabilization
-- Spammer profile: `625` RPS for `120` seconds after a `180` second warmup at `300` RPS
-
-### Nodes
-
-Command:
-
-```bash
+# Get all cluster nodes:
 kubectl get nodes
-```
 
-Recorded output:
-
-```text
+response:
 NAME                                         STATUS   ROLES    AGE    VERSION
 gk3-sre-cluster-nap-z0hdt6i8-ccbfd612-9l49   Ready    <none>   170m   v1.35.1-gke.1396002
-```
 
-### Pods
-
-Command:
-
-```bash
+Get all pods:
 kubectl get pods
-```
 
-Recorded output:
-
-```text
+response:
 NAME                           READY   STATUS    RESTARTS   AGE
 game-service-d9cc468d9-mmj7x   1/1     Running   0          174m
 game-service-d9cc468d9-qxm7g   1/1     Running   0          174m
-```
 
-### Services
-
-Command:
-
-```bash
+Get all services:
 kubectl get svc
-```
 
-Recorded output:
-
-```text
+response:
 NAME           TYPE           CLUSTER-IP       EXTERNAL-IP    PORT(S)        AGE
 game-service   LoadBalancer   34.118.225.128   34.118.34.44   80:32469/TCP   165m
 kubernetes     ClusterIP      34.118.224.1     <none>         443/TCP        24h
-```
 
-## Load Test Procedure
-
-The load test was started with:
-
-```bash
+Created a new job:
 kubectl apply -f spammer.yaml
-```
+kubectl get pods
 
-Recorded pod state after creating the Job:
-
-```text
+response:
+PS C:\Users\Jovan\Desktop\game-service\game-service> kubectl get pods
 NAME                           READY   STATUS      RESTARTS   AGE
 game-service-d9cc468d9-mmj7x   1/1     Running     0          3h42m
 game-service-d9cc468d9-qxm7g   1/1     Running     0          3h42m
 spammer-qnsbn                  0/1     Completed   0          5m52s
-```
 
-The Job logs were viewed with:
-
-```bash
+Viewed logs:
 kubectl logs spammer-qnsbn
-```
 
-## Recorded Load Test Results
-
-### Scenario 1: Baseline at 1000 RPS
-
-Profile:
-
-- RPS: `1000`
-- Duration: `60s`
-- Warmup: `60s @ 100 req/s`
-- Endpoints: `get_stats`, `update_player`
-
-Recorded output:
-
-```text
 Spamming http://game-service:80
   RPS         : 1000
   Duration    : 60s
@@ -127,22 +63,12 @@ Latency (ms):
   min : 25.1
   max : 68062.0
 ============================================================
-```
 
-This baseline configuration did not sustain the requested throughput and produced a high 5xx error rate.
+We can now decrease some env vars, as well as to increase resources such as RAM or CPU, or replicas, in deployment.yaml to get a higher amount of 2xx responses
 
-### Scenario 2: Reduced Load at 500 RPS
+Decreasing the spammer RPS to 500, with no change to the CPU or RAM (which essentially isn't an improvement, but doing HPA with even 6 or 4 replicas is stopped by Google)
+Note: Increasing the CPU limit to 400m while holding RPS at 1000 dramatically increased the success rate
 
-Profile:
-
-- RPS: `500`
-- Duration: `60s`
-- Warmup: `60s @ 50 req/s`
-- Endpoints: `get_stats`, `update_player`
-
-Recorded output:
-
-```text
 Spamming http://game-service:80
   RPS         : 500
   Duration    : 60s
@@ -171,15 +97,9 @@ Latency (ms):
   min : 9.7
   max : 30814.5
 ============================================================
-```
 
-Reducing the offered load improved the success rate, but the service still produced a material number of 5xx responses.
+If we apply max 4 replicas at 30% CPU utilisation
 
-### Scenario 3: HPA with Maximum 4 Replicas at 30% CPU Utilization
-
-Recorded output:
-
-```text
 Spamming http://game-service:80
   RPS         : 500
   Duration    : 60s
@@ -208,15 +128,10 @@ Latency (ms):
   min : 6.9
   max : 27048.5
 ============================================================
-```
 
-This configuration significantly improved throughput and reduced server errors to a negligible level. The lower CPU utilization target was used to encourage earlier scale-out for this workload pattern.
+And 30% is for the other pods to have time to wake up, obviously it is for this use case only.
 
-### Scenario 4: CPU Request Reduced to 50m with 60% CPU Utilization Target
-
-Recorded output:
-
-```text
+Reducing the requested CPU to 50m (increasing CPU util to 60%)
 Spamming http://game-service:80
   RPS         : 500
   Duration    : 60s
@@ -245,64 +160,56 @@ Latency (ms):
   min : 5.9
   max : 1409.1
 ============================================================
-```
 
-This was the strongest recorded result in the verification notes. Under the `500` RPS profile, the service completed all `30000` requests successfully with no 5xx responses.
+Final selected scaling configuration:
+- Deployment starts with 2 replicas.
+- HPA scales from 2 to 5 replicas at a 30% CPU utilization target.
+- HPA scale-up behavior allows up to 3 pods or 200% growth every 15s.
+- HPA scale-down stabilization is 60s.
+- Per-pod request: 50m CPU, 52Mi memory.
+- Per-pod limit: 120m CPU, 128Mi memory.
+- Uvicorn access logs are disabled to reduce per-request overhead without changing application source code.
+- Spammer profile: 650 RPS for 120s after 60s warmup at 150 RPS.
 
-### Scenario 5: Selected Scaling Configuration
+The final configuration was selected through an iterative tuning process. I adjusted:
+- game-service CPU and memory requests/limits
+- HPA min/max replicas
+- HPA CPU utilization target
+- HPA scale-up and scale-down behavior
+- spammer warmup duration and warmup RPS
+- spammer load-test RPS
 
-The final selected configuration disables Uvicorn access logs and uses the HPA to scale from 2 base replicas to 5 replicas during warmup. This keeps idle resources low while still preparing enough capacity before the measured spike.
+The goal was to keep the idle deployment small, allow automatic scale-out during the warmup phase, and find the highest tested spike load that still kept the error rate low.
 
-During warmup, HPA was observed scaling from 2 to 5 replicas:
+Final selected spike result:
 
-```text
-NAME               REFERENCE                 TARGETS         MINPODS   MAXPODS   REPLICAS
-game-service-hpa   Deployment/game-service   cpu: 137%/30%   2         5         5
-```
-
-Recorded output:
-
-```text
 Spamming http://game-service:80
-  RPS         : 625
+  RPS         : 650
   Duration    : 120s
-  Warmup      : 180s @ 300 req/s
+  Warmup      : 60s @ 150 req/s
   Endpoints   : ['get_stats', 'update_player']
 
-Warming up for 180s at 300 req/s...
+Warming up for 60s at 150 req/s...
 Warmup done.
-Sending 75000 requests at 625 req/s for 120s...
+Sending 78000 requests at 650 req/s for 120s...
 
 ============================================================
 SPAMMER REPORT
 ============================================================
-Total requests : 75000
-Wall time      : 120.29s
-Throughput     : 623.5 req/s
-Success (2xx)  : 74994
+Total requests : 78000
+Wall time      : 120.28s
+Throughput     : 648.5 req/s
+Success (2xx)  : 77857
 Client err(4xx): 0
-Errors/5xx     : 6
+Errors/5xx     : 143
 
 Latency (ms):
-  avg : 343.9
-  p50 : 87.2
-  p95 : 913.8
-  p99 : 6645.9
-  min : 4.9
-  max : 15953.0
+  avg : 839.1
+  p50 : 180.1
+  p95 : 2279.8
+  p99 : 16645.3
+  min : 5.5
+  max : 30557.3
 ============================================================
-```
 
-This is a `99.992%` success rate under the `625` RPS spike profile. Higher tests were also tried: `650` RPS produced `88` 5xx responses, while `700` RPS produced `574` 5xx responses. `750` RPS was rejected because it overloaded the deployment and caused pod restarts.
-
-## Conclusion
-
-The verification data shows a clear progression:
-
-- The baseline deployment could not sustain `1000` RPS reliably.
-- Reducing traffic to `500` RPS improved results, but did not eliminate server-side failures.
-- Adding autoscaling headroom and tuning CPU-based scaling materially improved performance.
-- Disabling Uvicorn access logs removed a major source of per-request overhead.
-- The selected configuration starts at 2 replicas and scales to 5 during warmup, producing near-zero 5xx responses under a `625` RPS spike.
-
-This repository is therefore configured around a real scale-out demonstration: low steady-state replicas, warmup-driven HPA scale-out, and a high-RPS spike handled by the scaled deployment.
+This is the selected scaling result: 143 errors out of 78000 requests, or about 0.183% 5xx, while demonstrating automatic scale-out from the 2-replica baseline.
